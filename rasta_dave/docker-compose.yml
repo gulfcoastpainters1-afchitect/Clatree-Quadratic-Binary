@@ -1,0 +1,103 @@
+ helper_daemon.py
+import time
+import requests
+import random # Used for simulating local sensor data
+
+# --- Configuration: Adjust to your Environment ---
+BRAIN_SYNC_URL = "http://brain:5000/daemon/sync" 
+WHEEL_OMEGA = 1.00 # Revolutions per second
+SUPERFRAME_TRIPS = 9 # Define a nonary superframe of 9 trips
+
+# Placeholder for the current state of the wheel artifact
+CURRENT_WHEEL_STATE = {
+    "RuntimeOffsets": {
+        "lane_offsets": [0.234, 0.875, 0.456, 0.119, 0.762, 0.342, 0.984, 0.501, 0.217] # Initial control vector
+    }
+}
+# --- End Configuration ---
+
+def collect_signal():
+    """Simulates local metric collection (Sense), normalized to [-1.0, 1.0]."""
+    raw = random.uniform(-1.0, 1.0)
+    return max(-1, min(1, raw)) 
+
+def sync_with_brain(signal, current_state):
+    """Communicates with the external FastAPI/Cloud server (Learn/Phase Anchor)."""
+    try:
+        payload = {
+            "local_signal": signal,
+            "current_offsets": current_state["RuntimeOffsets"]["lane_offsets"]
+        }
+        response = requests.post(BRAIN_SYNC_URL, json=payload, timeout=2)
+        response.raise_for_status() 
+        
+        new_offsets = response.json().get("new_offsets")
+        if new_offsets and len(new_offsets) == 9:
+            current_state["RuntimeOffsets"]["lane_offsets"] = new_offsets
+            print(f"🧠 SYNC: New offsets received. First: {new_offsets[0]:.3f}")
+        else:
+            print("🧠 SYNC: No new offsets received. Using current state.")
+            
+    except requests.exceptions.RequestException as e:
+        print(f"🛑 BRAIN ERROR: Failed to sync with server. Using local offsets. Error: {e}")
+
+def execute_helper_action(trip_index, offsets):
+    """Executes the helper action (Act) during Rotation-Only Trips."""
+    import os
+    
+    # We use Lane 0 and Lane 1 offsets for demonstration actions
+    focus_level = offsets[0]
+    email_tag = offsets[1]
+    
+    print(f"✨ EXEC: Trip {trip_index} (ROTATION). Triggering Action...")
+
+    # 1. Action: Focus Mode (Uses Lane 0)
+    action_type = "focus"
+    action_param = "1" if focus_level > 0.5 else "0"
+    
+    # Execute the disposable child daemon script mounted from the host
+    os.system(f"./actions/exec_action.sh {action_type} {action_param} &")
+    
+    # 2. Action: Email Task (Uses Lane 1)
+    if email_tag > 0.8:
+        print(f"  [LANE 1]: Spawning Child: Triggering EMAIL send (Tag: {email_tag:.2f})")
+        os.system(f"./actions/exec_action.sh email_send 0 &")
+
+    # & runs the script in the background; they are expected to exit quickly (Zero Smear)
+
+def run_observer_daemon():
+    """The main scheduler loop, running the Superframe clock."""
+    global CURRENT_WHEEL_STATE
+    ssc_trip_counter = 0 
+
+    print(f"🤖 Observer-Helper Daemon Starting. Superframe clock running.")
+    print(f"SYNC URL: {BRAIN_SYNC_URL}")
+    
+    while True:
+        mode_index = ssc_trip_counter % SUPERFRAME_TRIPS
+        
+        # 1. Sense, Learn (Sync)
+        local_signal = collect_signal()
+        sync_with_brain(local_signal, CURRENT_WHEEL_STATE)
+        
+        # 2. Act (Execute Helper Function)
+        if mode_index in [2, 5, 8]:
+            # ROTATION ONLY trips are the phase-clean window for actions
+            execute_helper_action(mode_index, CURRENT_WHEEL_STATE["RuntimeOffsets"]["lane_offsets"])
+        
+        # Log mode and wait for next trip
+        mode_map = {0:'FWD', 3:'FWD', 6:'FWD', 1:'RET', 4:'RET', 7:'RET', 2:'ROT', 5:'ROT', 8:'ROT'}
+        current_mode = mode_map.get(mode_index)
+        
+        print(f"\n[Trip {ssc_trip_counter:02d} | Mode: {current_mode}] Signal: {local_signal:+.4f} | Lane 0: {CURRENT_WHEEL_STATE['RuntimeOffsets']['lane_offsets'][0]:.3f}")
+        
+        # 3. Advance Clock
+        ssc_trip_counter += 1
+        time.sleep(1 / WHEEL_OMEGA) 
+
+if __name__ == '__main__':
+    try:
+        run_observer_daemon()
+    except KeyboardInterrupt:
+        print("\n\nDaemon shut down by Keyboard Interrupt.")
+

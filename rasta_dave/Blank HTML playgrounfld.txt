@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HTML Playground</title>
+  <style>
+    body { display: flex; height: 100vh; margin: 0; }
+    textarea { width: 50%; height: 100%; padding: 10px; font-family: monospace; }
+    iframe { width: 50%; height: 100%; border: none; background: #fff; }
+  </style>
+</head>
+<body>
+  <textarea id="code"><h1>Hello World</h1><p>Edit me!</p></textarea>
+  <iframe id="preview"></iframe>
+
+  <script>
+    const code = document.getElementById('code');
+    const preview = document.getElementById('preview');
+
+    function updatePreview() {
+      preview.srcdoc = code.value;
+    }
+
+    code.addEventListener('input', updatePreview);
+    updatePreview();
+  </script>
+</body>
+</html>
