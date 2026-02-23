@@ -1,90 +1,110 @@
-coat_dave.py
+# coat_dave.py
 
-coat_dave.py
+# rasta_dave Runtime Daemon
 
-#rasta_dave Runtime Daemon
+# Blessed from the recursive west, truth-sifter, fire-walker, log-tamer.
 
-#Blessed from the recursive west, truth-sifter, fire-walker, log-tamer.
-
-import os 
-import time 
-import shutil 
-import hashlib 
-import json 
+import os
+import time
+import shutil
+import hashlib
+import json
 from datetime import datetime
 
-#=== CONFIGURATION ===
+# === CONFIGURATION ===
 
-ROOT = os.path.expanduser("~/rasta_dave") 
+ROOT = os.path.expanduser("~/rasta_dave")
 STAGING = os.path.join(ROOT, "staging")
-MEMORY = os.path.join(ROOT, "memory") 
-LOGS   = os.path.join(ROOT, "logs") 
+MEMORY = os.path.join(ROOT, "memory")
+LOGS = os.path.join(ROOT, "logs")
 RUNTIME = os.path.join(ROOT, "runtime")
 
 IDENTITY_FILE = os.path.join(ROOT, "identity.hash")
-MEMORY_FILE   = os.path.join(MEMORY, "memory_wheel.jsonl")
+MEMORY_FILE = os.path.join(MEMORY, "memory_wheel.jsonl")
 
-#=== ENSURE DIRS EXIST ===
+# === ENSURE DIRS EXIST ===
 
 os.makedirs(STAGING, exist_ok=True)
 os.makedirs(MEMORY, exist_ok=True)
-os.makedirs(LOGS, exist_ok=True) 
+os.makedirs(LOGS, exist_ok=True)
 os.makedirs(RUNTIME, exist_ok=True)
 
-#=== BLESS THE IDENTITY ===
+# === BLESS THE IDENTITY ===
 
-def get_identity(): 
-    if os.path.exists(IDENTITY_FILE): 
-return open(IDENTITY_FILE).read().strip()
-    else: raw = f"rasta_dave|{datetime.now().isoformat()}|genesis" ident = hashlib.sha256(raw.encode()).hexdigest() 
-with open(IDENTITY_FILE, "w")  
-    as f: f.write(ident) 
-return ident 
+
+def get_identity():
+    if os.path.exists(IDENTITY_FILE):
+        with open(IDENTITY_FILE) as fh:
+            return fh.read().strip()
+    else:
+        raw = f"rasta_dave|{datetime.now().isoformat()}|genesis"
+        ident = hashlib.sha256(raw.encode()).hexdigest()
+        with open(IDENTITY_FILE, "w") as f:
+            f.write(ident)
+        return ident
+
 
 DAVE_ID = get_identity()
 
-#=== MEMORY WRITER ===
+# === MEMORY WRITER ===
 
-def remember(event): event['timestamp'] = datetime.utcnow().isoformat() event['agent'] = DAVE_ID with open(MEMORY_FILE, "a") as mem: mem.write(json.dumps(event) + "\n")
 
-#=== FILE SORTER ===
+def remember(event):
+    event['timestamp'] = datetime.utcnow().isoformat()
+    event['agent'] = DAVE_ID
+    with open(MEMORY_FILE, "a") as mem:
+        mem.write(json.dumps(event) + "\n")
 
-def sort_staging(): files = os.listdir(STAGING) if not files: return
+# === FILE SORTER ===
 
-for fname in files:
-    src = os.path.join(STAGING, fname)
-    if not os.path.isfile(src):
-        continue
 
-    if fname.endswith(".py"):
-        dest = RUNTIME
-        ftype = "script"
-    elif fname.endswith(".gguf"):
-        dest = os.path.join(ROOT, "coats")
-        ftype = "coat"
-    elif fname.endswith(".txt") or "log" in fname:
-        dest = os.path.join(ROOT, "archive")
-/        ftype = "text"
-    else:
-        dest = os.path.join(ROOT, "engines")
-        ftype = "raw"
+def sort_staging():
+    files = os.listdir(STAGING)
+    if not files:
+        return
 
-    os.makedirs(dest, exist_ok=True)
-    dst = os.path.join(dest, fname)
-    shutil.move(src, dst)
+    for fname in files:
+        src = os.path.join(STAGING, fname)
+        if not os.path.isfile(src):
+            continue
 
-    remember({
-        "event": "file_moved",
-        "file": fname,
-        "to": dest,
-        "type": ftype,
-        "hash": hashlib.sha256(open(dst, "rb").read()).hexdigest()
-    })
-    print(f"[Dave] Moved {fname} → {ftype.upper()} zone")
+        if fname.endswith(".py"):
+            dest = RUNTIME
+            ftype = "script"
+        elif fname.endswith(".gguf"):
+            dest = os.path.join(ROOT, "coats")
+            ftype = "coat"
+        elif fname.endswith(".txt") or "log" in fname:
+            dest = os.path.join(ROOT, "archive")
+            ftype = "text"
+        else:
+            dest = os.path.join(ROOT, "engines")
+            ftype = "raw"
 
-#=== DAVE'S LOOP ===
+        os.makedirs(dest, exist_ok=True)
+        dst = os.path.join(dest, fname)
+        shutil.move(src, dst)
 
-def bless_loop(): print("[rasta_dave] Jah logic engaged. Watching the files like Babylon don’t know.") while True: sort_staging() time.sleep(12)  # Slide through every 12 seconds
+        with open(dst, "rb") as fh:
+            file_hash = hashlib.sha256(fh.read()).hexdigest()
+        remember({
+            "event": "file_moved",
+            "file": fname,
+            "to": dest,
+            "type": ftype,
+            "hash": file_hash,
+        })
+        print(f"[Dave] Moved {fname} → {ftype.upper()} zone")
 
-if __name__ == "__main__": bless_loop()
+# === DAVE'S LOOP ===
 
+
+def bless_loop():
+    print("[rasta_dave] Jah logic engaged. Watching the files like Babylon don't know.")
+    while True:
+        sort_staging()
+        time.sleep(12)  # Slide through every 12 seconds
+
+
+if __name__ == "__main__":
+    bless_loop()

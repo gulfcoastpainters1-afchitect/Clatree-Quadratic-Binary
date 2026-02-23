@@ -1,5 +1,3 @@
-Clatree_r9_demon_emu.py
-
 #!/usr/bin/env python3
 """
 claytree_r9_daemon.py
