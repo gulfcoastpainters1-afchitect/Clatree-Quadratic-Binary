@@ -5,3 +5,7 @@ rasta_dave/proxy/
 # Runtime log written by the daemon
 rasta_dave/rasta_dave_log.txt
 rasta_dave_log.txt
+
+# Python bytecode
+__pycache__/
+*.pyc
